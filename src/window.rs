@@ -109,25 +109,31 @@ fn keys() -> Vec<Key> {
 /// in the current text colour so it follows the theme.
 fn backspace_icon() -> gtk::DrawingArea {
     let area = gtk::DrawingArea::builder()
-        .content_width(26)
-        .content_height(17)
+        .content_width(20)
+        .content_height(14)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
         .build();
     area.set_draw_func(|a, cr, w, h| {
         let c = a.color();
-        cr.set_source_rgba(c.red() as f64, c.green() as f64, c.blue() as f64, c.alpha() as f64);
-        cr.set_line_width(1.8);
-        cr.set_line_join(gtk::cairo::LineJoin::Round);
-        cr.set_line_cap(gtk::cairo::LineCap::Round);
         let (w, h) = (w as f64, h as f64);
-        let (x0, x1, x2) = (1.5, 1.5 + h * 0.5, w - 1.5);
+        let (x0, x1, x2) = (0.5, 0.5 + h * 0.5, w - 0.5);
+        cr.set_source_rgba(c.red() as f64, c.green() as f64, c.blue() as f64, c.alpha() as f64);
+        cr.set_line_join(gtk::cairo::LineJoin::Round);
         cr.move_to(x0, h / 2.0);
-        cr.line_to(x1, 1.5);
-        cr.line_to(x2, 1.5);
-        cr.line_to(x2, h - 1.5);
-        cr.line_to(x1, h - 1.5);
+        cr.line_to(x1, 0.5);
+        cr.line_to(x2, 0.5);
+        cr.line_to(x2, h - 0.5);
+        cr.line_to(x1, h - 0.5);
         cr.close_path();
+        let _ = cr.fill_preserve();
+        cr.set_line_width(1.0);
         let _ = cr.stroke();
-        let (cx, cy, r) = ((x1 + x2) / 2.0 + 1.0, h / 2.0, h * 0.18);
+        // cut the × out of the filled tag
+        let (cx, cy, r) = ((x1 + x2) / 2.0 + 0.5, h / 2.0, h * 0.17);
+        cr.set_operator(gtk::cairo::Operator::Clear);
+        cr.set_line_width(1.8);
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
         cr.move_to(cx - r, cy - r);
         cr.line_to(cx + r, cy + r);
         cr.move_to(cx + r, cy - r);
@@ -306,7 +312,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     display_inner.append(&status);
     let display = ResizeBin::new(&display_inner);
     display.add_css_class("display");
-    display.set_size_request(240, 84);
+    display.set_size_request(240, 96);
 
     // ----------------------------------------------------------- keypad
     // Fixed-size keys, anchored to the bottom of the window.
@@ -486,13 +492,24 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     sidebar.set_visible(cfg.history_visible);
 
     // ------------------------------------------------------ pane layout
-    display.set_vexpand(true);
     display.set_hexpand(true);
+    // Extra window height goes to a recent-calculations list above the
+    // display; at the minimum height it collapses to nothing.
+    let inline_view = build_history_list(&ui, history);
+    inline_view.add_css_class("inline-history");
+    let inline_scroller = gtk::ScrolledWindow::builder()
+        .child(&inline_view)
+        .vexpand(true)
+        .hexpand(true)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .min_content_height(0)
+        .build();
     let calc = gtk::Box::new(gtk::Orientation::Vertical, 10);
     calc.set_margin_start(10);
     calc.set_margin_end(10);
     calc.set_margin_top(10);
     calc.set_margin_bottom(10);
+    calc.append(&inline_scroller);
     calc.append(&display);
     calc.append(&grid);
     let root = gtk::Paned::builder()
@@ -513,16 +530,14 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
 
     // ------------------------------------------------------- header bar
     let header = gtk::HeaderBar::new();
-    let basic_btn = gtk::ToggleButton::with_label("Basic");
-    let adv_btn = gtk::ToggleButton::with_label("Advanced");
-    adv_btn.set_group(Some(&basic_btn));
-    basic_btn.set_active(!cfg.advanced);
-    adv_btn.set_active(cfg.advanced);
-    let mode_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    mode_box.add_css_class("linked");
-    mode_box.append(&basic_btn);
-    mode_box.append(&adv_btn);
-    header.set_title_widget(Some(&mode_box));
+    // One compact toggle keeps the header (and so the window) narrow.
+    let adv_btn = gtk::ToggleButton::builder()
+        .label("Advanced")
+        .tooltip_text("Advanced mode: trig, logs, powers, factorial")
+        .active(cfg.advanced)
+        .build();
+    header.pack_start(&adv_btn);
+    header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
     let hist_toggle = gtk::ToggleButton::builder()
         .icon_name("document-open-recent-symbolic")
         .tooltip_text("History (Ctrl+H)")

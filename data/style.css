@@ -26,3 +26,5 @@
 .keypad button.clear { color: @error_color; }
 .history-row { padding: 6px 10px; }
 .history-row .expr { opacity: 0.6; }
+.inline-history { background: none; }
+.inline-history row { background: none; }
