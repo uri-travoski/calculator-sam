@@ -1,0 +1,60 @@
+[package]
+name = "sam-calc"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.83"
+description = "A minimal, fast desktop calculator for Linux (GTK4)"
+license = "MIT"
+readme = "README.md"
+keywords = ["calculator", "gtk"]
+categories = ["gui"]
+
+[[bin]]
+name = "sam-calc"
+path = "src/main.rs"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.10", features = ["v4_12"] }
+rug = { version = "1.30", default-features = false, features = ["std", "float", "integer"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[package.metadata.deb]
+name = "sam-calc"
+section = "math"
+priority = "optional"
+depends = "$auto"
+extended-description = "Fast, low-resource GTK4 calculator with arbitrary-precision arithmetic, a shared history sidebar, multiple windows and a resizable layout."
+assets = [
+    ["target/release/sam-calc", "usr/bin/", "755"],
+    ["data/au.sam.Calc.desktop", "usr/share/applications/", "644"],
+    ["data/au.sam.Calc.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["data/au.sam.Calc.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["data/icons/au.sam.Calc-48.png", "usr/share/icons/hicolor/48x48/apps/au.sam.Calc.png", "644"],
+    ["data/icons/au.sam.Calc-128.png", "usr/share/icons/hicolor/128x128/apps/au.sam.Calc.png", "644"],
+    ["data/icons/au.sam.Calc-256.png", "usr/share/icons/hicolor/256x256/apps/au.sam.Calc.png", "644"],
+    ["data/icons/au.sam.Calc-512.png", "usr/share/icons/hicolor/512x512/apps/au.sam.Calc.png", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "sam-calc"
+license = "MIT"
+assets = [
+    { source = "target/release/sam-calc", dest = "/usr/bin/sam-calc", mode = "755" },
+    { source = "data/au.sam.Calc.desktop", dest = "/usr/share/applications/au.sam.Calc.desktop", mode = "644" },
+    { source = "data/au.sam.Calc.metainfo.xml", dest = "/usr/share/metainfo/au.sam.Calc.metainfo.xml", mode = "644" },
+    { source = "data/au.sam.Calc.svg", dest = "/usr/share/icons/hicolor/scalable/apps/au.sam.Calc.svg", mode = "644" },
+    { source = "data/icons/au.sam.Calc-48.png", dest = "/usr/share/icons/hicolor/48x48/apps/au.sam.Calc.png", mode = "644" },
+    { source = "data/icons/au.sam.Calc-128.png", dest = "/usr/share/icons/hicolor/128x128/apps/au.sam.Calc.png", mode = "644" },
+    { source = "data/icons/au.sam.Calc-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/au.sam.Calc.png", mode = "644" },
+    { source = "data/icons/au.sam.Calc-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/au.sam.Calc.png", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+gtk4 = ">= 4.12"

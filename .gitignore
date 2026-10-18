@@ -1,0 +1,6 @@
+/target
+.env
+*.deb
+*.rpm
+*.AppImage
+*.flatpak
