@@ -1,0 +1,26 @@
+.display {
+  background-color: alpha(currentColor, 0.06);
+  border: 1px solid alpha(currentColor, 0.15);
+  border-radius: 10px;
+}
+.display entry,
+.display entry:focus-within {
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0 4px;
+}
+.display .status { opacity: 0.65; }
+.display .status.error { color: @error_color; opacity: 1; }
+.keypad button {
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 10px;
+}
+.keypad button.op { background-image: none; background-color: alpha(currentColor, 0.14); }
+.keypad button.fn { background-image: none; background-color: alpha(currentColor, 0.07); }
+.keypad button.clear { color: @error_color; }
+.history-row { padding: 6px 10px; }
+.history-row .expr { opacity: 0.6; }
