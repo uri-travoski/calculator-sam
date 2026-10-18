@@ -3,6 +3,7 @@ name = "sam-calc"
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.83"
+authors = ["Sam"]
 description = "A minimal, fast desktop calculator for Linux (GTK4)"
 license = "MIT"
 readme = "README.md"
@@ -27,6 +28,7 @@ panic = "abort"
 
 [package.metadata.deb]
 name = "sam-calc"
+copyright = "2026, Sam"
 section = "math"
 priority = "optional"
 depends = "$auto"
