@@ -18,8 +18,20 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev m4 pkg-config
       - run: cargo test --locked
 
-  deb-rpm:
+  # Create the release first so the parallel build jobs can attach to it.
+  # (Packages go straight to the release, not through artifact storage.)
+  create-release:
     needs: tests
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
+  deb-rpm:
+    needs: [tests, create-release]
+    if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -28,15 +40,16 @@ jobs:
       - run: cargo build --release --locked
       - run: cargo deb --no-build -o sam-calc_amd64.deb
       - run: cargo generate-rpm -o sam-calc.x86_64.rpm
-      - uses: actions/upload-artifact@v4
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
-          name: deb-rpm
-          path: |
+          files: |
             sam-calc_amd64.deb
             sam-calc.x86_64.rpm
 
   flatpak:
-    needs: tests
+    needs: [tests, create-release]
+    if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
@@ -52,9 +65,15 @@ jobs:
           bundle: sam-calc.flatpak
           manifest-path: packaging/flatpak/au.sam.Calc.yml
           cache-key: flatpak-${{ github.sha }}
+          upload-artifact: false
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: sam-calc.flatpak
 
   appimage:
-    needs: tests
+    needs: [tests, create-release]
+    if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -77,24 +96,7 @@ jobs:
             --plugin gtk \
             --output appimage
           mv Calculator*.AppImage Calculator.Sam-x86_64.AppImage
-      - uses: actions/upload-artifact@v4
-        with:
-          name: appimage
-          path: Calculator.Sam-x86_64.AppImage
-
-  release:
-    needs: [deb-rpm, flatpak, appimage]
-    runs-on: ubuntu-24.04
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
-          files: |
-            sam-calc_amd64.deb
-            sam-calc.x86_64.rpm
-            sam-calc.flatpak
-            Calculator.Sam-x86_64.AppImage
-          generate_release_notes: true
+          files: Calculator.Sam-x86_64.AppImage
