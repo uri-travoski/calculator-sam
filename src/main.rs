@@ -45,13 +45,9 @@ fn main() -> glib::ExitCode {
                     gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
                 );
             }
-            // Show minimise/maximise/close like other desktop windows when
-            // the system layout only offers a close button.
+            // Close button only; the theme draws it like other windows.
             if let Some(settings) = gtk::Settings::default() {
-                let layout = settings.gtk_decoration_layout().unwrap_or_default();
-                if !layout.contains("minimize") || !layout.contains("maximize") {
-                    settings.set_gtk_decoration_layout(Some(":minimize,maximize,close"));
-                }
+                settings.set_gtk_decoration_layout(Some(":close"));
             }
             *history.borrow_mut() = Some(history::History::load());
 

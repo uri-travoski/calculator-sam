@@ -146,6 +146,48 @@ fn backspace_icon() -> gtk::DrawingArea {
     area
 }
 
+/// The history button face: a receipt with three lines, drawn with cairo in
+/// the current text colour so it follows the theme.
+fn receipt_icon() -> gtk::DrawingArea {
+    let area = gtk::DrawingArea::builder()
+        .content_width(15)
+        .content_height(20)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .build();
+    area.set_draw_func(|a, cr, w, h| {
+        let c = a.color();
+        let sc = h as f64 / 512.0;
+        let ox = (w as f64 - 384.0 * sc) / 2.0;
+        cr.translate(ox, 0.0);
+        cr.scale(sc, sc);
+        cr.set_source_rgba(c.red() as f64, c.green() as f64, c.blue() as f64, c.alpha() as f64);
+        cr.set_line_join(gtk::cairo::LineJoin::Round);
+        let top = [(0.0, 24.0), (40.0, 6.0), (80.0, 40.0), (136.0, 6.0), (192.0, 40.0), (248.0, 6.0), (304.0, 40.0), (360.0, 6.0), (384.0, 24.0)];
+        cr.move_to(top[0].0, top[0].1);
+        for (x, y) in &top[1..] {
+            cr.line_to(*x, *y);
+        }
+        for (x, y) in top.iter().rev() {
+            cr.line_to(*x, 512.0 - *y);
+        }
+        cr.close_path();
+        let _ = cr.fill_preserve();
+        cr.set_line_width(20.0);
+        let _ = cr.stroke();
+        // cut the three text lines out
+        cr.set_operator(gtk::cairo::Operator::Clear);
+        cr.set_line_width(32.0);
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
+        for y in [160.0, 256.0, 352.0] {
+            cr.move_to(112.0, y);
+            cr.line_to(272.0, y);
+        }
+        let _ = cr.stroke();
+    });
+    area
+}
+
 /// True if typing `s` after a finished calculation should start a new
 /// expression (digits, functions, parentheses) rather than continue it.
 fn starts_new(s: &str) -> bool {
@@ -551,6 +593,13 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         .shrink_start_child(false)
         .shrink_end_child(false)
         .build();
+    // With the sidebar open the display takes the extra height itself.
+    inline_scroller.connect_visible_notify({
+        let display = display.clone();
+        move |sc| display.set_vexpand(!sc.is_visible())
+    });
+    inline_scroller.set_visible(!cfg.history_visible);
+    display.set_vexpand(cfg.history_visible);
     if cfg.history_visible {
         root.set_position(cfg.width - cfg.sidebar);
     }
@@ -574,7 +623,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     header.pack_start(&mode_btn);
     header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
     let hist_toggle = gtk::ToggleButton::builder()
-        .icon_name("document-open-recent-symbolic")
+        .child(&receipt_icon())
         .tooltip_text("History (Ctrl+H)")
         .action_name("win.toggle-history")
         .build();
@@ -652,12 +701,15 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     );
     {
         let sidebar = sidebar.clone();
+        let inline_scroller = inline_scroller.clone();
         let root = root.clone();
         let win_w = win.downgrade();
         let side_w = Cell::new(cfg.sidebar);
         toggle.connect_activate(move |a, _| {
             let show = !a.state().and_then(|s| s.get::<bool>()).unwrap_or(false);
             a.set_state(&show.to_variant());
+            // the sidebar shows the history, so the inline list steps aside
+            inline_scroller.set_visible(!show);
             let Some(win) = win_w.upgrade() else { return };
             let (w, h) = (win.width(), win.height());
             if show {
