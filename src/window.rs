@@ -77,7 +77,8 @@ fn keys() -> Vec<Key> {
         k("x²", Ins("^2"), b + 2, 0, "op"),
         k("√", Ins("√("), b + 3, 0, "op"),
         k("AC", Clear, b, 1, "clear"),
-        k("⌫", Back, b + 2, 1, "op"),
+        k("⌫", Back, b + 1, 1, "op"),
+        k("%", Ins("%"), b + 2, 1, "op"),
         k("÷", Ins("÷"), b + 3, 1, "op"),
         k("7", Ins("7"), b, 2, ""),
         k("8", Ins("8"), b + 1, 2, ""),
@@ -91,14 +92,13 @@ fn keys() -> Vec<Key> {
         k("2", Ins("2"), b + 1, 4, ""),
         k("3", Ins("3"), b + 2, 4, ""),
         k("+", Ins("+"), b + 3, 4, "op"),
-        k("%", Ins("%"), b, 5, "op"),
-        k("0", Ins("0"), b + 1, 5, ""),
-        k(".", Ins("."), b + 2, 5, ""),
-        k("=", Eval, b + 3, 5, "equals"),
+        k("0", Ins("0"), b, 5, ""),
+        k(".", Ins("."), b + 1, 5, ""),
+        k("=", Eval, b + 2, 5, "equals"),
     ];
     for key in &mut v {
         match key.label {
-            "AC" => key.span = 2, // the clear key is double width
+            "=" => key.span = 2, // the equals key is double width
             "ans" => key.span = 3,
             // the ( ) x² √ row lives in Mid mode
             "(" | ")" | "x²" | "√" => key.level = 1,
@@ -173,6 +173,10 @@ struct Ui {
     /// The entry currently holds a finished result.
     fresh: Cell<bool>,
     mode: Cell<Mode>,
+    /// Hides entries from this window's inline list only (the sidebar and
+    /// the saved history are untouched).
+    inline_filter: gtk::CustomFilter,
+    hidden_key: &'static str,
 }
 
 impl Ui {
@@ -200,6 +204,19 @@ impl Ui {
             }
         }
         e.grab_focus_without_selecting();
+    }
+
+    /// AC: clear the expression and the recent calculations above the display.
+    fn clear_all(&self) {
+        let store = &self.history.store;
+        for i in 0..store.n_items() {
+            if let Some(item) = store.item(i) {
+                // SAFETY: only ever read back as `bool` under the same key.
+                unsafe { item.set_data(self.hidden_key, true) };
+            }
+        }
+        self.inline_filter.changed(gtk::FilterChange::MoreStrict);
+        self.clear();
     }
 
     fn clear(&self) {
@@ -271,7 +288,7 @@ impl Ui {
     fn act(&self, act: Act) {
         match act {
             Act::Ins(t) => self.insert(t),
-            Act::Clear => self.clear(),
+            Act::Clear => self.clear_all(),
             Act::Back => self.backspace(),
             Act::Eval => self.commit(),
             Act::Angle => {
@@ -359,6 +376,14 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         angle_btn.set_label("RAD");
     }
 
+    static WINDOWS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let hidden_key: &'static str = Box::leak(
+        format!("hidden-{}", WINDOWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)).into_boxed_str(),
+    );
+    let inline_filter = gtk::CustomFilter::new(move |obj| {
+        // SAFETY: the key is only ever set to a `bool` in `clear_all`.
+        unsafe { obj.data::<bool>(hidden_key).is_none() }
+    });
     let ui = Rc::new(Ui {
         history: history.clone(),
         entry: entry.clone(),
@@ -369,6 +394,8 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         ans: RefCell::new(Float::new(engine::PRECISION)),
         fresh: Cell::new(false),
         mode: Cell::new(cfg.mode),
+        inline_filter: inline_filter.clone(),
+        hidden_key,
     });
     ui.ans.borrow_mut().assign(0);
 
@@ -458,7 +485,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     }
 
     // ---------------------------------------------------- history pane
-    let list_view = build_history_list(&ui, history);
+    let list_view = build_history_list(&ui, history, None);
     let scroller = gtk::ScrolledWindow::builder()
         .child(&list_view)
         .vexpand(true)
@@ -497,7 +524,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     display.set_hexpand(true);
     // Extra window height goes to a recent-calculations list above the
     // display; at the minimum height it collapses to nothing.
-    let inline_view = build_history_list(&ui, history);
+    let inline_view = build_history_list(&ui, history, Some(&inline_filter));
     inline_view.add_css_class("inline-history");
     let inline_scroller = gtk::ScrolledWindow::builder()
         .child(&inline_view)
@@ -804,7 +831,11 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
 }
 
 /// The virtualised history list: a `ListView` over the shared `ListStore`.
-fn build_history_list(ui: &Rc<Ui>, history: &Rc<History>) -> gtk::ListView {
+fn build_history_list(
+    ui: &Rc<Ui>,
+    history: &Rc<History>,
+    filter: Option<&gtk::CustomFilter>,
+) -> gtk::ListView {
     let factory = gtk::SignalListItemFactory::new();
     factory.connect_setup({
         let history = history.clone();
@@ -859,7 +890,13 @@ fn build_history_list(ui: &Rc<Ui>, history: &Rc<History>) -> gtk::ListView {
         }
     });
 
-    let model = gtk::NoSelection::new(Some(history.store.clone()));
+    let model = match filter {
+        Some(f) => gtk::NoSelection::new(Some(gtk::FilterListModel::new(
+            Some(history.store.clone()),
+            Some(f.clone()),
+        ))),
+        None => gtk::NoSelection::new(Some(history.store.clone())),
+    };
     let view = gtk::ListView::new(Some(model), Some(factory));
     view.set_single_click_activate(true);
 
