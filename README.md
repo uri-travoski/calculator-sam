@@ -6,7 +6,7 @@ A minimal, fast desktop calculator for Linux, written in Rust with plain GTK4
 * **Exact decimals** – `0.1 + 0.2` is `0.3` (≈50 significant digits internally via GMP/MPFR, 15 shown).
 * **Basic and Advanced modes** – trig (deg/rad), inverse trig, ln, log, eˣ, xʸ, π, e, factorial.
 * **Type or click** – one editable expression entry; implicit multiplication (`2π`, `3(4+1)`), unary minus, `ans`.
-* **Fully resizable** – drag the window, the divider between display and keypad, or the divider next to the history; fonts and buttons scale with the space.
+* **Resizable window** – keys keep their size and stay anchored at the bottom; the display takes the extra room. Size and mode are remembered.
 * **History sidebar** – virtualised list (50 000+ entries are fine), click an entry to reuse its result, right-click to copy or delete, **export as a text file**, clear with confirmation.
 * **Multiple windows, one process** – a second launch or `sam-calc --new-window` opens a window in the running instance; all windows share one history.
 * **Check for Updates** in the menu: opens the GitHub download page only if a newer release exists (checked only when you ask; needs the repo to be public).

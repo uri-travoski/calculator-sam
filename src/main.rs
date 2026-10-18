@@ -58,7 +58,12 @@ fn main() -> glib::ExitCode {
             let quit = gio::SimpleAction::new("quit", None);
             quit.connect_activate({
                 let app = app.clone();
-                move |_, _| app.quit()
+                move |_, _| {
+                    for w in app.windows() {
+                        let _ = w.activate_action("win.save-config", None);
+                    }
+                    app.quit()
+                }
             });
             app.add_action(&quit);
 

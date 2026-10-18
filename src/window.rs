@@ -18,9 +18,13 @@ use crate::resize_bin::ResizeBin;
 use crate::update::{self, Outcome};
 use crate::{APP_ID, REPO_URL, RELEASES_URL, VERSION};
 
-const ROWS: i32 = 5;
 const ADV_COLS: i32 = 3;
-const BASIC_COLS: i32 = 5;
+/// Fixed key size: resizing the window never changes the buttons.
+const KEY_W: i32 = 74;
+const KEY_H: i32 = 56;
+const KEY_GAP: i32 = 6;
+/// Extra window width the advanced column block needs.
+const ADV_WIDTH: i32 = ADV_COLS * (KEY_W + KEY_GAP);
 
 #[derive(Clone, Copy)]
 enum Act {
@@ -63,38 +67,74 @@ fn keys() -> Vec<Key> {
         k("e", Ins("e"), 1, 3, "fn"),
         k("xʸ", Ins("^"), 2, 3, "fn"),
         k("n!", Ins("!"), 0, 4, "fn"),
-        k("DEG", Angle, 1, 4, "fn"),
-        k("10ˣ", Ins("10^"), 2, 4, "fn"),
-        // basic block
-        k("C", Clear, b, 0, "clear"),
-        k("(", Ins("("), b + 1, 0, "op"),
-        k(")", Ins(")"), b + 2, 0, "op"),
-        k("%", Ins("%"), b + 3, 0, "op"),
-        k("÷", Ins("÷"), b + 4, 0, "op"),
-        k("√", Ins("√("), b, 1, "op"),
-        k("7", Ins("7"), b + 1, 1, ""),
-        k("8", Ins("8"), b + 2, 1, ""),
-        k("9", Ins("9"), b + 3, 1, ""),
-        k("×", Ins("×"), b + 4, 1, "op"),
-        k("x²", Ins("^2"), b, 2, "op"),
-        k("4", Ins("4"), b + 1, 2, ""),
-        k("5", Ins("5"), b + 2, 2, ""),
-        k("6", Ins("6"), b + 3, 2, ""),
-        k("−", Ins("−"), b + 4, 2, "op"),
-        k("⌫", Back, b, 3, "op"),
-        k("1", Ins("1"), b + 1, 3, ""),
-        k("2", Ins("2"), b + 2, 3, ""),
-        k("3", Ins("3"), b + 3, 3, ""),
-        k("+", Ins("+"), b + 4, 3, "op"),
-        k("ans", Ins("ans"), b, 4, "op"),
-        k("0", Ins("0"), b + 1, 4, ""),
-        k(".", Ins("."), b + 2, 4, ""),
-        k("=", Eval, b + 3, 4, "suggested-action"),
+        k("10ˣ", Ins("10^"), 1, 4, "fn"),
+        k("DEG", Angle, 2, 4, "fn"),
+        k("ans", Ins("ans"), 0, 5, "fn"),
+        // basic block (4 columns)
+        k("(", Ins("("), b, 0, "op"),
+        k(")", Ins(")"), b + 1, 0, "op"),
+        k("x²", Ins("^2"), b + 2, 0, "op"),
+        k("√", Ins("√("), b + 3, 0, "op"),
+        k("C", Clear, b, 1, "clear"),
+        k("⌫", Back, b + 2, 1, "op"),
+        k("÷", Ins("÷"), b + 3, 1, "op"),
+        k("7", Ins("7"), b, 2, ""),
+        k("8", Ins("8"), b + 1, 2, ""),
+        k("9", Ins("9"), b + 2, 2, ""),
+        k("×", Ins("×"), b + 3, 2, "op"),
+        k("4", Ins("4"), b, 3, ""),
+        k("5", Ins("5"), b + 1, 3, ""),
+        k("6", Ins("6"), b + 2, 3, ""),
+        k("−", Ins("−"), b + 3, 3, "op"),
+        k("1", Ins("1"), b, 4, ""),
+        k("2", Ins("2"), b + 1, 4, ""),
+        k("3", Ins("3"), b + 2, 4, ""),
+        k("+", Ins("+"), b + 3, 4, "op"),
+        k("%", Ins("%"), b, 5, "op"),
+        k("0", Ins("0"), b + 1, 5, ""),
+        k(".", Ins("."), b + 2, 5, ""),
+        k("=", Eval, b + 3, 5, "suggested-action"),
     ];
-    if let Some(eq) = v.last_mut() {
-        eq.span = 2;
+    for key in &mut v {
+        match key.label {
+            "C" => key.span = 2, // the clear key is double width
+            "ans" => key.span = 3,
+            _ => {}
+        }
     }
     v
+}
+
+/// The backspace key face: a left-pointing tag with an ×, drawn with cairo
+/// in the current text colour so it follows the theme.
+fn backspace_icon() -> gtk::DrawingArea {
+    let area = gtk::DrawingArea::builder()
+        .content_width(26)
+        .content_height(17)
+        .build();
+    area.set_draw_func(|a, cr, w, h| {
+        let c = a.color();
+        cr.set_source_rgba(c.red() as f64, c.green() as f64, c.blue() as f64, c.alpha() as f64);
+        cr.set_line_width(1.8);
+        cr.set_line_join(gtk::cairo::LineJoin::Round);
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
+        let (w, h) = (w as f64, h as f64);
+        let (x0, x1, x2) = (1.5, 1.5 + h * 0.5, w - 1.5);
+        cr.move_to(x0, h / 2.0);
+        cr.line_to(x1, 1.5);
+        cr.line_to(x2, 1.5);
+        cr.line_to(x2, h - 1.5);
+        cr.line_to(x1, h - 1.5);
+        cr.close_path();
+        let _ = cr.stroke();
+        let (cx, cy, r) = ((x1 + x2) / 2.0 + 1.0, h / 2.0, h * 0.18);
+        cr.move_to(cx - r, cy - r);
+        cr.line_to(cx + r, cy + r);
+        cr.move_to(cx + r, cy - r);
+        cr.line_to(cx - r, cy + r);
+        let _ = cr.stroke();
+    });
+    area
 }
 
 /// True if typing `s` after a finished calculation should start a new
@@ -124,9 +164,6 @@ struct Ui {
     /// The entry currently holds a finished result.
     fresh: Cell<bool>,
     advanced: Cell<bool>,
-    key_px: Cell<i32>,
-    key_size: Cell<(i32, i32)>,
-    key_pending: Cell<bool>,
 }
 
 impl Ui {
@@ -235,28 +272,6 @@ impl Ui {
             }
         }
     }
-
-    fn apply_key_fonts(&self) {
-        let (w, h) = self.key_size.get();
-        let cols = if self.advanced.get() { ADV_COLS + BASIC_COLS } else { BASIC_COLS };
-        let cell = (w / cols).min(h / ROWS) as f64;
-        let px = (cell * 0.36).clamp(10.0, 72.0);
-        if px as i32 == self.key_px.get() {
-            return;
-        }
-        self.key_px.set(px as i32);
-        for (btn, len) in &self.keys {
-            let f = match len {
-                1 => 1.0,
-                2 => 0.82,
-                3 => 0.8,
-                _ => 0.62,
-            };
-            if let Some(label) = btn.child().and_downcast::<gtk::Label>() {
-                label.set_attributes(Some(&font_attrs(px * f)));
-            }
-        }
-    }
 }
 
 pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
@@ -275,6 +290,9 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         .vexpand(true)
         .valign(gtk::Align::Center)
         .placeholder_text("0")
+        .width_chars(1)
+        .max_width_chars(1)
+        .hexpand(true)
         .build();
     let status = gtk::Label::builder()
         .xalign(1.0)
@@ -291,24 +309,32 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     display.set_size_request(240, 84);
 
     // ----------------------------------------------------------- keypad
+    // Fixed-size keys, anchored to the bottom of the window.
     let grid = gtk::Grid::builder()
-        .row_homogeneous(true)
-        .column_homogeneous(true)
-        .row_spacing(6)
-        .column_spacing(6)
-        .hexpand(true)
-        .vexpand(true)
+        .row_spacing(KEY_GAP)
+        .column_spacing(KEY_GAP)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::End)
         .build();
+    grid.add_css_class("keypad");
     let defs = keys();
     let mut buttons = Vec::new();
     let mut angle_btn = None;
     for key in &defs {
         let btn = gtk::Button::builder()
-            .label(key.label)
             .focus_on_click(false)
-            .hexpand(true)
-            .vexpand(true)
+            .width_request(KEY_W)
+            .height_request(KEY_H)
             .build();
+        if matches!(key.act, Act::Back) {
+            btn.set_child(Some(&backspace_icon()));
+            btn.set_tooltip_text(Some("Backspace"));
+        } else {
+            btn.set_label(key.label);
+            if key.label.chars().count() >= 3 {
+                btn.add_css_class("small");
+            }
+        }
         if !key.class.is_empty() {
             btn.add_css_class(key.class);
         }
@@ -322,9 +348,6 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     if cfg.radians {
         angle_btn.set_label("RAD");
     }
-    let keypad = ResizeBin::new(&grid);
-    keypad.add_css_class("keypad");
-    keypad.set_size_request(240, 220);
 
     let ui = Rc::new(Ui {
         history: history.clone(),
@@ -336,9 +359,6 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         ans: RefCell::new(Float::new(engine::PRECISION)),
         fresh: Cell::new(false),
         advanced: Cell::new(cfg.advanced),
-        key_px: Cell::new(0),
-        key_size: Cell::new((0, 0)),
-        key_pending: Cell::new(false),
     });
     ui.ans.borrow_mut().assign(0);
 
@@ -357,23 +377,8 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         });
     }
 
-    // Font scaling: event-driven, applied from an idle so we never change
-    // widget state inside size_allocate.
+    // Display font scales with the display area (event-driven).
     {
-        let w = weak(&ui);
-        keypad.connect_resized(move |width, height| {
-            let Some(ui) = w.upgrade() else { return };
-            ui.key_size.set((width, height));
-            if !ui.key_pending.replace(true) {
-                let w = Rc::downgrade(&ui);
-                glib::idle_add_local_once(move || {
-                    if let Some(ui) = w.upgrade() {
-                        ui.key_pending.set(false);
-                        ui.apply_key_fonts();
-                    }
-                });
-            }
-        });
         let last = Cell::new(0);
         let w = weak(&ui);
         display.connect_resized(move |_, height| {
@@ -481,21 +486,15 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     sidebar.set_visible(cfg.history_visible);
 
     // ------------------------------------------------------ pane layout
-    let calc = gtk::Paned::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .wide_handle(true)
-        .start_child(&display)
-        .end_child(&keypad)
-        .resize_start_child(false)
-        .resize_end_child(true)
-        .shrink_start_child(false)
-        .shrink_end_child(false)
-        .position(((cfg.height as f64) * 0.24) as i32)
-        .margin_start(10)
-        .margin_end(10)
-        .margin_top(10)
-        .margin_bottom(10)
-        .build();
+    display.set_vexpand(true);
+    display.set_hexpand(true);
+    let calc = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    calc.set_margin_start(10);
+    calc.set_margin_end(10);
+    calc.set_margin_top(10);
+    calc.set_margin_bottom(10);
+    calc.append(&display);
+    calc.append(&grid);
     let root = gtk::Paned::builder()
         .orientation(gtk::Orientation::Horizontal)
         .wide_handle(true)
@@ -509,7 +508,8 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     if cfg.history_visible {
         root.set_position(cfg.width - cfg.sidebar);
     }
-    win.set_child(Some(&root));
+    let root_bin = ResizeBin::new(&root);
+    win.set_child(Some(&root_bin));
 
     // ------------------------------------------------------- header bar
     let header = gtk::HeaderBar::new();
@@ -551,17 +551,25 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
 
     {
         let w = weak(&ui);
+        let win_w = win.downgrade();
         adv_btn.connect_toggled(move |b| {
             let Some(ui) = w.upgrade() else { return };
             let on = b.is_active();
-            ui.advanced.set(on);
+            if on == ui.advanced.replace(on) {
+                return;
+            }
             for ((btn, _), key) in ui.keys.iter().zip(keys().iter()) {
                 if key.adv {
                     btn.set_visible(on);
                 }
             }
-            ui.key_px.set(0);
-            ui.apply_key_fonts();
+            // Keys keep their size, so the window grows/shrinks with them.
+            if let Some(win) = win_w.upgrade() {
+                if !win.is_maximized() && !win.is_fullscreen() {
+                    let w = if on { win.width() + ADV_WIDTH } else { (win.width() - ADV_WIDTH).max(300) };
+                    win.set_default_size(w, win.height());
+                }
+            }
         });
     }
 
@@ -677,7 +685,6 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
                 .website(REPO_URL)
                 .website_label("github.com/uri-travoski/calculator-sam")
                 .comments("A minimal, fast calculator with exact decimal results.")
-                .license_type(gtk::License::MitX11)
                 .build()
                 .present();
         });
@@ -697,25 +704,53 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     // Keep the shared ui alive exactly as long as the window.
     unsafe { win.set_data("ui", ui.clone()) };
 
-    win.connect_close_request({
+    // Persist size/mode whenever the user changes them (debounced), on
+    // close, and before quitting, so Ctrl+Q cannot lose them.
+    let save: Rc<dyn Fn()> = {
         let ui = Rc::downgrade(&ui);
+        let win_w = win.downgrade();
         let sidebar = sidebar.clone();
         let root = root.clone();
-        move |win| {
-            if let Some(ui) = ui.upgrade() {
-                let mut c = Config::load();
-                if !win.is_maximized() {
-                    c.width = win.width();
-                    c.height = win.height();
-                }
-                c.advanced = ui.advanced.get();
-                c.radians = ui.radians.get();
-                c.history_visible = sidebar.is_visible();
-                if sidebar.is_visible() {
-                    c.sidebar = (win.width() - root.position()).clamp(220, 1200);
-                }
-                c.save();
+        Rc::new(move || {
+            let (Some(ui), Some(win)) = (ui.upgrade(), win_w.upgrade()) else { return };
+            let mut c = Config::load();
+            if !win.is_maximized() && !win.is_fullscreen() && win.width() > 1 {
+                c.width = win.width();
+                c.height = win.height();
             }
+            c.advanced = ui.advanced.get();
+            c.radians = ui.radians.get();
+            c.history_visible = sidebar.is_visible();
+            if sidebar.is_visible() {
+                c.sidebar = (win.width() - root.position()).clamp(220, 1200);
+            }
+            c.save();
+        })
+    };
+    {
+        let generation = Rc::new(Cell::new(0u32));
+        let save = save.clone();
+        root_bin.connect_resized(move |_, _| {
+            let n = generation.get().wrapping_add(1);
+            generation.set(n);
+            let (generation, save) = (generation.clone(), save.clone());
+            glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+                if generation.get() == n {
+                    save();
+                }
+            });
+        });
+    }
+    let save_action = gio::SimpleAction::new("save-config", None);
+    {
+        let save = save.clone();
+        save_action.connect_activate(move |_, _| save());
+    }
+    win.add_action(&save_action);
+    win.connect_close_request({
+        let save = save.clone();
+        move |_| {
+            save();
             glib::Propagation::Proceed
         }
     });

@@ -18,7 +18,9 @@
   min-width: 0;
   min-height: 0;
   border-radius: 10px;
+  font-size: 20px;
 }
+.keypad button.small { font-size: 15px; }
 .keypad button.op { background-image: none; background-color: alpha(currentColor, 0.14); }
 .keypad button.fn { background-image: none; background-color: alpha(currentColor, 0.07); }
 .keypad button.clear { color: @error_color; }

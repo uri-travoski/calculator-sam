@@ -19,8 +19,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            width: 560,
-            height: 560,
+            width: 370,
+            height: 580,
             advanced: false,
             radians: false,
             history_visible: false,
