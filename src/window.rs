@@ -15,7 +15,8 @@ use crate::config::Config;
 use crate::engine::{self, AngleMode, Env, DISPLAY_DIGITS};
 use crate::history::{History, HistoryItem};
 use crate::resize_bin::ResizeBin;
-use crate::APP_ID;
+use crate::update::{self, Outcome};
+use crate::{APP_ID, REPO_URL, RELEASES_URL, VERSION};
 
 const ROWS: i32 = 5;
 const ADV_COLS: i32 = 3;
@@ -535,6 +536,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     sec2.append(Some("Export History…"), Some("win.export-history"));
     sec2.append(Some("Clear History…"), Some("win.clear-history"));
     let sec3 = gio::Menu::new();
+    sec3.append(Some("Check for Updates…"), Some("win.check-updates"));
     sec3.append(Some("Keyboard Shortcuts"), Some("win.shortcuts"));
     sec3.append(Some("About Calculator.Sam"), Some("win.about"));
     menu.append_section(None, &sec1);
@@ -671,7 +673,9 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
                 .modal(true)
                 .program_name("Calculator.Sam")
                 .logo_icon_name(APP_ID)
-                .version(env!("CARGO_PKG_VERSION"))
+                .version(VERSION)
+                .website(REPO_URL)
+                .website_label("github.com/uri-travoski/calculator-sam")
                 .comments("A minimal, fast calculator with exact decimal results.")
                 .license_type(gtk::License::MitX11)
                 .build()
@@ -679,6 +683,16 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         });
     }
     win.add_action(&about);
+
+    let updates = gio::SimpleAction::new("check-updates", None);
+    {
+        let win_w = win.downgrade();
+        updates.connect_activate(move |_, _| {
+            let Some(win) = win_w.upgrade() else { return };
+            check_for_updates(&win);
+        });
+    }
+    win.add_action(&updates);
 
     // Keep the shared ui alive exactly as long as the window.
     unsafe { win.set_data("ui", ui.clone()) };
@@ -877,4 +891,54 @@ fn show_shortcuts(parent: &gtk::ApplicationWindow) {
         .child(&grid)
         .build()
         .present();
+}
+
+/// Look up the latest release (off the main thread) and tell the user:
+/// open the download page only if a newer version exists.
+fn check_for_updates(win: &gtk::ApplicationWindow) {
+    let win = win.clone();
+    glib::spawn_future_local(async move {
+        let outcome = gio::spawn_blocking(update::check)
+            .await
+            .unwrap_or_else(|_| Outcome::Failed("The update check was interrupted".into()));
+        match outcome {
+            Outcome::Newer(latest) => {
+                let dialog = gtk::AlertDialog::builder()
+                    .message("A new version is available")
+                    .detail(format!(
+                        "Calculator.Sam {latest} is available. You are running {VERSION}."
+                    ))
+                    .buttons(["Not Now", "Open Download Page"])
+                    .cancel_button(0)
+                    .default_button(1)
+                    .build();
+                let parent = win.clone();
+                dialog.choose(Some(&win), gio::Cancellable::NONE, move |res| {
+                    if res == Ok(1) {
+                        gtk::UriLauncher::new(RELEASES_URL).launch(
+                            Some(&parent),
+                            gio::Cancellable::NONE,
+                            |_| {},
+                        );
+                    }
+                });
+            }
+            Outcome::UpToDate => {
+                gtk::AlertDialog::builder()
+                    .message("You are running the latest version")
+                    .detail(format!("Calculator.Sam {VERSION} is up to date."))
+                    .buttons(["OK"])
+                    .build()
+                    .show(Some(&win));
+            }
+            Outcome::Failed(why) => {
+                gtk::AlertDialog::builder()
+                    .message("Could not check for updates")
+                    .detail(why)
+                    .buttons(["OK"])
+                    .build()
+                    .show(Some(&win));
+            }
+        }
+    });
 }

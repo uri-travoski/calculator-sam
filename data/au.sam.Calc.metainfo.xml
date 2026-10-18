@@ -8,12 +8,14 @@
   <description>
     <p>A small GTK4 calculator with arbitrary-precision arithmetic (0.1 + 0.2 is 0.3), basic and advanced modes, a history sidebar shared between all windows that can be exported as a text file, and a fully resizable layout.</p>
   </description>
+  <url type="homepage">https://github.com/uri-travoski/calculator-sam</url>
   <launchable type="desktop-id">au.sam.Calc.desktop</launchable>
   <provides><binary>sam-calc</binary></provides>
   <categories><category>Utility</category><category>Calculator</category></categories>
   <content_rating type="oars-1.1"/>
   <supports><control>pointing</control><control>keyboard</control></supports>
   <releases>
+    <release version="1.1.0" date="2026-10-18"/>
     <release version="1.0.0" date="2026-10-18"/>
   </releases>
 </component>

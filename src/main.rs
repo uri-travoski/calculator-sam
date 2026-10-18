@@ -2,6 +2,7 @@ mod config;
 mod engine;
 mod history;
 mod resize_bin;
+mod update;
 mod window;
 
 use std::cell::RefCell;
@@ -11,6 +12,11 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
 pub const APP_ID: &str = "au.sam.Calc";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const REPO_URL: &str = "https://github.com/uri-travoski/calculator-sam";
+pub const RELEASES_URL: &str = "https://github.com/uri-travoski/calculator-sam/releases/latest";
+pub const REPO_API_LATEST: &str =
+    "https://api.github.com/repos/uri-travoski/calculator-sam/releases/latest";
 
 fn main() -> glib::ExitCode {
     // A calculator needs no GPU: the software renderer avoids creating a GL

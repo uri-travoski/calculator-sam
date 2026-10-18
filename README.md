@@ -9,6 +9,7 @@ A minimal, fast desktop calculator for Linux, written in Rust with plain GTK4
 * **Fully resizable** – drag the window, the divider between display and keypad, or the divider next to the history; fonts and buttons scale with the space.
 * **History sidebar** – virtualised list (50 000+ entries are fine), click an entry to reuse its result, right-click to copy or delete, **export as a text file**, clear with confirmation.
 * **Multiple windows, one process** – a second launch or `sam-calc --new-window` opens a window in the running instance; all windows share one history.
+* **Check for Updates** in the menu: opens the GitHub download page only if a newer release exists (checked only when you ask; needs the repo to be public).
 * Remembers window size, mode and angle unit in `$XDG_CONFIG_HOME/au.sam.Calc/config.toml`; history lives in `$XDG_DATA_HOME/au.sam.Calc/history.jsonl`.
 
 Keys: `Enter`/`=` calculate · `Esc` clear · `Ctrl+H` history · `Ctrl+N` new window · `Ctrl+W` close · `Ctrl+Q` quit · `F1` shortcuts.
