@@ -4,7 +4,7 @@ A minimal, fast desktop calculator for Linux, written in Rust with plain GTK4
 (no libadwaita, no WebKit). Works on X11 and Wayland.
 
 * **Exact decimals** – `0.1 + 0.2` is `0.3` (≈50 significant digits internally via GMP/MPFR, 15 shown).
-* **Basic and Advanced modes** – trig (deg/rad), inverse trig, ln, log, eˣ, xʸ, π, e, factorial.
+* **Basic, Mid and Advanced modes** – Mid adds the `( ) x² √` row; Advanced adds trig (deg/rad), inverse trig, ln, log, eˣ, xʸ, π, e, factorial, `ans`.
 * **Type or click** – one editable expression entry; implicit multiplication (`2π`, `3(4+1)`), unary minus, `ans`.
 * **Resizable window** – keys keep their size and stay anchored at the bottom; the display takes the extra room. Size and mode are remembered.
 * **History sidebar** – virtualised list (50 000+ entries are fine), click an entry to reuse its result, right-click to copy or delete, **export as a text file**, clear with confirmation.

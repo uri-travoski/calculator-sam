@@ -11,7 +11,7 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use rug::{Assign, Float};
 
-use crate::config::Config;
+use crate::config::{Config, Mode};
 use crate::engine::{self, AngleMode, Env, DISPLAY_DIGITS};
 use crate::history::{History, HistoryItem};
 use crate::resize_bin::ResizeBin;
@@ -42,11 +42,12 @@ struct Key {
     row: i32,
     span: i32,
     class: &'static str,
-    adv: bool,
+    /// Shown when the mode level is at least this (0 basic, 1 mid, 2 advanced).
+    level: u8,
 }
 
 const fn k(label: &'static str, act: Act, col: i32, row: i32, class: &'static str) -> Key {
-    Key { label, act, col, row, span: 1, class, adv: col < ADV_COLS }
+    Key { label, act, col, row, span: 1, class, level: if col < ADV_COLS { 2 } else { 0 } }
 }
 
 fn keys() -> Vec<Key> {
@@ -75,7 +76,7 @@ fn keys() -> Vec<Key> {
         k(")", Ins(")"), b + 1, 0, "op"),
         k("x²", Ins("^2"), b + 2, 0, "op"),
         k("√", Ins("√("), b + 3, 0, "op"),
-        k("C", Clear, b, 1, "clear"),
+        k("AC", Clear, b, 1, "clear"),
         k("⌫", Back, b + 2, 1, "op"),
         k("÷", Ins("÷"), b + 3, 1, "op"),
         k("7", Ins("7"), b, 2, ""),
@@ -93,12 +94,14 @@ fn keys() -> Vec<Key> {
         k("%", Ins("%"), b, 5, "op"),
         k("0", Ins("0"), b + 1, 5, ""),
         k(".", Ins("."), b + 2, 5, ""),
-        k("=", Eval, b + 3, 5, "suggested-action"),
+        k("=", Eval, b + 3, 5, "equals"),
     ];
     for key in &mut v {
         match key.label {
-            "C" => key.span = 2, // the clear key is double width
+            "AC" => key.span = 2, // the clear key is double width
             "ans" => key.span = 3,
+            // the ( ) x² √ row lives in Mid mode
+            "(" | ")" | "x²" | "√" => key.level = 1,
             _ => {}
         }
     }
@@ -169,7 +172,7 @@ struct Ui {
     ans: RefCell<Float>,
     /// The entry currently holds a finished result.
     fresh: Cell<bool>,
-    advanced: Cell<bool>,
+    mode: Cell<Mode>,
 }
 
 impl Ui {
@@ -293,8 +296,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     let entry = gtk::Entry::builder()
         .xalign(1.0)
         .has_frame(false)
-        .vexpand(true)
-        .valign(gtk::Align::Center)
+        .valign(gtk::Align::End)
         .placeholder_text("0")
         .width_chars(1)
         .max_width_chars(1)
@@ -302,14 +304,16 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         .build();
     let status = gtk::Label::builder()
         .xalign(1.0)
+        .valign(gtk::Align::End)
+        .vexpand(true)
         .ellipsize(pango::EllipsizeMode::Start)
         .margin_end(4)
         .css_classes(["status"])
         .build();
     status.set_label(" ");
     let display_inner = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    display_inner.append(&entry);
     display_inner.append(&status);
+    display_inner.append(&entry);
     let display = ResizeBin::new(&display_inner);
     display.add_css_class("display");
     display.set_size_request(240, 96);
@@ -348,7 +352,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
             angle_btn = Some(btn.clone());
         }
         grid.attach(&btn, key.col, key.row, key.span, 1);
-        buttons.push((btn, key.label.chars().count()));
+        buttons.push((btn, key.level as usize));
     }
     let angle_btn = angle_btn.expect("angle key");
     if cfg.radians {
@@ -364,16 +368,14 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         radians: Cell::new(cfg.radians),
         ans: RefCell::new(Float::new(engine::PRECISION)),
         fresh: Cell::new(false),
-        advanced: Cell::new(cfg.advanced),
+        mode: Cell::new(cfg.mode),
     });
     ui.ans.borrow_mut().assign(0);
 
     let weak = |ui: &Rc<Ui>| -> Weak<Ui> { Rc::downgrade(ui) };
 
     for ((btn, _), key) in buttons.iter().zip(&defs) {
-        if key.adv {
-            btn.set_visible(cfg.advanced);
-        }
+        btn.set_visible(key.level <= cfg.mode.level());
         let w = weak(&ui);
         let act = key.act;
         btn.connect_clicked(move |_| {
@@ -530,13 +532,19 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
 
     // ------------------------------------------------------- header bar
     let header = gtk::HeaderBar::new();
-    // One compact toggle keeps the header (and so the window) narrow.
-    let adv_btn = gtk::ToggleButton::builder()
-        .label("Advanced")
-        .tooltip_text("Advanced mode: trig, logs, powers, factorial")
-        .active(cfg.advanced)
+    // A compact mode menu keeps the header (and so the window) narrow.
+    let mode_menu = gio::Menu::new();
+    for m in [Mode::Basic, Mode::Mid, Mode::Advanced] {
+        let item = gio::MenuItem::new(Some(m.label()), None);
+        item.set_action_and_target_value(Some("win.mode"), Some(&m.name().to_variant()));
+        mode_menu.append_item(&item);
+    }
+    let mode_btn = gtk::MenuButton::builder()
+        .label(cfg.mode.label())
+        .tooltip_text("Calculator mode")
+        .menu_model(&mode_menu)
         .build();
-    header.pack_start(&adv_btn);
+    header.pack_start(&mode_btn);
     header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
     let hist_toggle = gtk::ToggleButton::builder()
         .icon_name("document-open-recent-symbolic")
@@ -564,29 +572,50 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     header.pack_end(&menu_btn);
     win.set_titlebar(Some(&header));
 
+    let mode_action = gio::SimpleAction::new_stateful(
+        "mode",
+        Some(glib::VariantTy::STRING),
+        &cfg.mode.name().to_variant(),
+    );
     {
         let w = weak(&ui);
         let win_w = win.downgrade();
-        adv_btn.connect_toggled(move |b| {
+        mode_action.connect_activate(move |a, param| {
+            let Some(new) = param
+                .and_then(|p| p.get::<String>())
+                .and_then(|n| Mode::from_name(&n))
+            else {
+                return;
+            };
             let Some(ui) = w.upgrade() else { return };
-            let on = b.is_active();
-            if on == ui.advanced.replace(on) {
+            let old = ui.mode.replace(new);
+            if old == new {
                 return;
             }
-            for ((btn, _), key) in ui.keys.iter().zip(keys().iter()) {
-                if key.adv {
-                    btn.set_visible(on);
-                }
+            a.set_state(&new.name().to_variant());
+            mode_btn.set_label(new.label());
+            for (btn, level) in &ui.keys {
+                btn.set_visible(*level as u8 <= new.level());
             }
             // Keys keep their size, so the window grows/shrinks with them.
             if let Some(win) = win_w.upgrade() {
                 if !win.is_maximized() && !win.is_fullscreen() {
-                    let w = if on { win.width() + ADV_WIDTH } else { (win.width() - ADV_WIDTH).max(300) };
-                    win.set_default_size(w, win.height());
+                    let extra = |m: Mode| {
+                        (
+                            if m == Mode::Advanced { ADV_WIDTH } else { 0 },
+                            if m.level() >= 1 { KEY_H + KEY_GAP } else { 0 },
+                        )
+                    };
+                    let ((ow, oh), (nw, nh)) = (extra(old), extra(new));
+                    win.set_default_size(
+                        (win.width() + nw - ow).max(300),
+                        (win.height() + nh - oh).max(360),
+                    );
                 }
             }
         });
     }
+    win.add_action(&mode_action);
 
     // ---------------------------------------------------------- actions
     let toggle = gio::SimpleAction::new_stateful(
@@ -733,7 +762,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
                 c.width = win.width();
                 c.height = win.height();
             }
-            c.advanced = ui.advanced.get();
+            c.mode = ui.mode.get();
             c.radians = ui.radians.get();
             c.history_visible = sidebar.is_visible();
             if sidebar.is_visible() {

@@ -6,11 +6,57 @@ use std::path::PathBuf;
 
 use crate::APP_ID;
 
+/// Which keys are shown: Basic, Mid (adds the `( ) x² √` row) or Advanced
+/// (Mid plus the scientific block).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mode {
+    #[default]
+    Basic,
+    Mid,
+    Advanced,
+}
+
+impl Mode {
+    pub fn name(self) -> &'static str {
+        match self {
+            Mode::Basic => "basic",
+            Mode::Mid => "mid",
+            Mode::Advanced => "advanced",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Mode::Basic => "Basic",
+            Mode::Mid => "Mid",
+            Mode::Advanced => "Advanced",
+        }
+    }
+
+    pub fn from_name(s: &str) -> Option<Self> {
+        match s {
+            "basic" => Some(Mode::Basic),
+            "mid" => Some(Mode::Mid),
+            "advanced" => Some(Mode::Advanced),
+            _ => None,
+        }
+    }
+
+    /// Keys with a level above this are hidden.
+    pub fn level(self) -> u8 {
+        match self {
+            Mode::Basic => 0,
+            Mode::Mid => 1,
+            Mode::Advanced => 2,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     pub width: i32,
     pub height: i32,
-    pub advanced: bool,
+    pub mode: Mode,
     pub radians: bool,
     pub history_visible: bool,
     pub sidebar: i32,
@@ -21,7 +67,7 @@ impl Default for Config {
         Self {
             width: 340,
             height: 660,
-            advanced: false,
+            mode: Mode::Basic,
             radians: false,
             history_visible: false,
             sidebar: 300,
@@ -62,7 +108,7 @@ impl Config {
                         cfg.height = v.clamp(360, 4000);
                     }
                 }
-                "mode" => cfg.advanced = value == "advanced",
+                "mode" => cfg.mode = Mode::from_name(value).unwrap_or_default(),
                 "angle" => cfg.radians = value == "rad",
                 "sidebar" => {
                     if let Ok(v) = value.parse::<i32>() {
@@ -81,7 +127,7 @@ impl Config {
             "width = {}\nheight = {}\nmode = \"{}\"\nangle = \"{}\"\nhistory = {}\nsidebar = {}\n",
             self.width,
             self.height,
-            if self.advanced { "advanced" } else { "basic" },
+            self.mode.name(),
             if self.radians { "rad" } else { "deg" },
             self.history_visible,
             self.sidebar,
@@ -106,7 +152,7 @@ mod tests {
         let c = Config {
             width: 800,
             height: 600,
-            advanced: true,
+            mode: Mode::Mid,
             radians: true,
             history_visible: true,
             sidebar: 333,
