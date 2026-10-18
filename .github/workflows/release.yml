@@ -1,0 +1,100 @@
+name: Release packages
+
+# Builds .deb, .rpm, Flatpak and AppImage for every version tag (v*) and
+# attaches them to the GitHub Release. Can also be run by hand to test.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev m4 pkg-config
+      - run: cargo test --locked
+
+  deb-rpm:
+    needs: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev m4 pkg-config
+      - run: cargo install cargo-deb cargo-generate-rpm --locked
+      - run: cargo build --release --locked
+      - run: cargo deb --no-build -o sam-calc_amd64.deb
+      - run: cargo generate-rpm -o sam-calc.x86_64.rpm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-rpm
+          path: |
+            sam-calc_amd64.deb
+            sam-calc.x86_64.rpm
+
+  flatpak:
+    needs: tests
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          pip install aiohttp toml
+          curl -fsSL -o flatpak-cargo-generator.py https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+          python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: sam-calc.flatpak
+          manifest-path: packaging/flatpak/au.sam.Calc.yml
+          cache-key: flatpak-${{ github.sha }}
+
+  appimage:
+    needs: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev m4 pkg-config libfuse2t64 file desktop-file-utils librsvg2-common
+      - run: cargo build --release --locked
+      - name: Build AppImage
+        env:
+          DEPLOY_GTK_VERSION: '4'
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          LINUXDEPLOY_OUTPUT_VERSION: ${{ github.ref_name }}
+        run: |
+          curl -fsSL -o linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-gtk.sh https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
+          chmod +x linuxdeploy linuxdeploy-plugin-gtk.sh
+          ./linuxdeploy --appdir AppDir \
+            --executable target/release/sam-calc \
+            --desktop-file data/au.sam.Calc.desktop \
+            --icon-file data/au.sam.Calc.svg \
+            --icon-filename au.sam.Calc \
+            --plugin gtk \
+            --output appimage
+          mv Calculator*.AppImage Calculator.Sam-x86_64.AppImage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: Calculator.Sam-x86_64.AppImage
+
+  release:
+    needs: [deb-rpm, flatpak, appimage]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sam-calc_amd64.deb
+            sam-calc.x86_64.rpm
+            sam-calc.flatpak
+            Calculator.Sam-x86_64.AppImage
+          generate_release_notes: true

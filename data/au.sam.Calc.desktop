@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator.Sam
+GenericName=Calculator
+Comment=Minimal, fast calculator
+Exec=sam-calc
+Icon=au.sam.Calc
+Terminal=false
+Categories=GTK;Utility;Calculator;
+Keywords=calculator;math;arithmetic;
+StartupNotify=true
+StartupWMClass=au.sam.Calc
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=sam-calc --new-window

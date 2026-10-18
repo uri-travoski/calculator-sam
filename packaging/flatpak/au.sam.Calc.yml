@@ -1,0 +1,34 @@
+app-id: au.sam.Calc
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: sam-calc
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/sam-calc/cargo
+modules:
+  - name: sam-calc
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml --locked
+      - cargo --offline build --release --locked
+      - install -Dm755 target/release/sam-calc /app/bin/sam-calc
+      - install -Dm644 data/au.sam.Calc.desktop /app/share/applications/au.sam.Calc.desktop
+      - install -Dm644 data/au.sam.Calc.metainfo.xml /app/share/metainfo/au.sam.Calc.metainfo.xml
+      - install -Dm644 data/au.sam.Calc.svg /app/share/icons/hicolor/scalable/apps/au.sam.Calc.svg
+      - install -Dm644 data/icons/au.sam.Calc-48.png /app/share/icons/hicolor/48x48/apps/au.sam.Calc.png
+      - install -Dm644 data/icons/au.sam.Calc-128.png /app/share/icons/hicolor/128x128/apps/au.sam.Calc.png
+      - install -Dm644 data/icons/au.sam.Calc-256.png /app/share/icons/hicolor/256x256/apps/au.sam.Calc.png
+      - install -Dm644 data/icons/au.sam.Calc-512.png /app/share/icons/hicolor/512x512/apps/au.sam.Calc.png
+    sources:
+      - type: dir
+        path: ../..
+      - cargo-sources.json
