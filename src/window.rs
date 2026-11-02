@@ -1,7 +1,7 @@
 //! One calculator window: display, keypad, history sidebar.
 //!
-//! Every window owns its own expression, mode and sidebar state; only the
-//! [`History`] model is shared.
+//! Every window owns its own expression, mode, sidebar state and
+//! [`History`] (one session); sessions are kept in the shared [`Archive`].
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
@@ -13,7 +13,8 @@ use rug::{Assign, Float};
 
 use crate::config::{Config, Mode};
 use crate::engine::{self, AngleMode, Env, DISPLAY_DIGITS};
-use crate::history::{History, HistoryItem};
+use crate::abbrev::{self, Piece};
+use crate::history::{Archive, History, HistoryItem, SessionInfo, SESSION_LIMIT};
 use crate::resize_bin::ResizeBin;
 use crate::update::{self, Outcome};
 use crate::{APP_ID, REPO_URL, RELEASES_URL, VERSION};
@@ -23,6 +24,8 @@ const ADV_COLS: i32 = 3;
 const KEY_W: i32 = 74;
 const KEY_H: i32 = 56;
 const KEY_GAP: i32 = 6;
+/// Height of the display area with the history sidebar closed.
+const DISPLAY_H: i32 = 96;
 /// Extra window width the advanced column block needs.
 const ADV_WIDTH: i32 = ADV_COLS * (KEY_W + KEY_GAP);
 
@@ -188,6 +191,35 @@ fn receipt_icon() -> gtk::DrawingArea {
     area
 }
 
+/// The new-window button face: a plus inside a circle, drawn with cairo in
+/// the current text colour so it follows the theme.
+fn plus_circle_icon() -> gtk::DrawingArea {
+    let area = gtk::DrawingArea::builder()
+        .content_width(20)
+        .content_height(20)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .build();
+    area.set_draw_func(|a, cr, w, h| {
+        let c = a.color();
+        let (w, h) = (w as f64, h as f64);
+        let (cx, cy) = (w / 2.0, h / 2.0);
+        let r = w.min(h) / 2.0 - 1.0;
+        cr.set_source_rgba(c.red() as f64, c.green() as f64, c.blue() as f64, c.alpha() as f64);
+        cr.set_line_width(1.6);
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
+        cr.arc(cx, cy, r, 0.0, std::f64::consts::TAU);
+        let _ = cr.stroke();
+        let a = r * 0.5;
+        cr.move_to(cx - a, cy);
+        cr.line_to(cx + a, cy);
+        cr.move_to(cx, cy - a);
+        cr.line_to(cx, cy + a);
+        let _ = cr.stroke();
+    });
+    area
+}
+
 /// True if typing `s` after a finished calculation should start a new
 /// expression (digits, functions, parentheses) rather than continue it.
 fn starts_new(s: &str) -> bool {
@@ -207,6 +239,11 @@ fn font_attrs(px: f64) -> pango::AttrList {
 struct Ui {
     history: Rc<History>,
     entry: gtk::Entry,
+    /// Drawn over the entry while a number is too long to show in full.
+    abbr: gtk::Label,
+    /// Full text of each abbreviated number currently shown.
+    full: RefCell<Vec<String>>,
+    fixing: Cell<bool>,
     status: gtk::Label,
     angle_btn: gtk::Button,
     keys: Vec<(gtk::Button, usize)>,
@@ -266,6 +303,48 @@ impl Ui {
         self.entry.set_text("");
         self.set_status("", false);
         self.entry.grab_focus_without_selecting();
+    }
+
+    /// Keep numbers within 15 digits and mirror the entry in `abbr`, with
+    /// every number over 7 digits cut short and ending in a `…` link.
+    fn refresh_display(&self) {
+        if self.fixing.get() {
+            return;
+        }
+        let text = self.entry.text();
+        if let Some(trimmed) = abbrev::limit_digits(&text) {
+            self.fixing.set(true);
+            let pos = self.entry.position();
+            self.entry.set_text(&trimmed);
+            self.entry.set_position(pos.min(trimmed.chars().count() as i32));
+            self.fixing.set(false);
+            return self.refresh_display();
+        }
+        let pieces = abbrev::pieces(&text);
+        let mut full = self.full.borrow_mut();
+        full.clear();
+        if pieces.iter().all(|p| matches!(p, Piece::Text(_))) {
+            self.abbr.set_visible(false);
+            self.entry.remove_css_class("masked");
+            return;
+        }
+        let mut markup = String::new();
+        for p in &pieces {
+            match p {
+                Piece::Text(t) => markup.push_str(&glib::markup_escape_text(t)),
+                Piece::Cut { short, full: f } => {
+                    markup.push_str(&format!(
+                        "{}<a href=\"n:{}\">…</a>",
+                        glib::markup_escape_text(short),
+                        full.len()
+                    ));
+                    full.push(f.clone());
+                }
+            }
+        }
+        self.abbr.set_markup(&markup);
+        self.abbr.set_visible(true);
+        self.entry.add_css_class("masked");
     }
 
     fn set_status(&self, text: &str, error: bool) {
@@ -342,8 +421,9 @@ impl Ui {
     }
 }
 
-pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
+pub fn new_window(app: &gtk::Application, archive: &Rc<Archive>, revive: Option<u64>) {
     let cfg = Config::load();
+    let history = &History::new(archive, revive);
     let win = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Calculator.Sam")
@@ -371,11 +451,24 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         .build();
     status.set_label(" ");
     let display_inner = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let abbr = gtk::Label::builder()
+        .xalign(1.0)
+        .halign(gtk::Align::Fill)
+        .valign(gtk::Align::Fill)
+        .margin_start(4)
+        .margin_end(4)
+        .ellipsize(pango::EllipsizeMode::Start)
+        .css_classes(["abbr"])
+        .visible(false)
+        .build();
+    let entry_overlay = gtk::Overlay::new();
+    entry_overlay.set_child(Some(&entry));
+    entry_overlay.add_overlay(&abbr);
     display_inner.append(&status);
-    display_inner.append(&entry);
+    display_inner.append(&entry_overlay);
     let display = ResizeBin::new(&display_inner);
     display.add_css_class("display");
-    display.set_size_request(240, 96);
+    display.set_size_request(240, DISPLAY_H);
 
     // ----------------------------------------------------------- keypad
     // Fixed-size keys, anchored to the bottom of the window.
@@ -429,6 +522,9 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     let ui = Rc::new(Ui {
         history: history.clone(),
         entry: entry.clone(),
+        abbr: abbr.clone(),
+        full: RefCell::new(Vec::new()),
+        fixing: Cell::new(false),
         status: status.clone(),
         angle_btn,
         keys: buttons.clone(),
@@ -440,6 +536,11 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         hidden_key,
     });
     ui.ans.borrow_mut().assign(0);
+    if let Some(last) = history.last_result() {
+        if let Ok(p) = Float::parse(&last) {
+            *ui.ans.borrow_mut() = Float::with_val(engine::PRECISION, p);
+        }
+    }
 
     let weak = |ui: &Rc<Ui>| -> Weak<Ui> { Rc::downgrade(ui) };
 
@@ -459,7 +560,9 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         let last = Cell::new(0);
         let w = weak(&ui);
         display.connect_resized(move |_, height| {
-            let px = ((height as f64) * 0.36).clamp(16.0, 72.0) as i32;
+            // The sidebar hands the display all spare height: keep the font
+            // the size it has with the sidebar closed.
+            let px = ((height.min(DISPLAY_H) as f64) * 0.36).clamp(16.0, 72.0) as i32;
             if px == last.replace(px) {
                 return;
             }
@@ -468,9 +571,26 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
             glib::idle_add_local_once(move || {
                 if let Some(ui) = w.upgrade() {
                     ui.entry.set_attributes(&font_attrs(px as f64));
+                    ui.abbr.set_attributes(Some(&font_attrs(px as f64)));
                     ui.status.set_attributes(Some(&font_attrs((px as f64 * 0.42).max(11.0))));
                 }
             });
+        });
+    }
+
+    // `…` shows the whole number in a popover.
+    {
+        let w = weak(&ui);
+        abbr.connect_activate_link(move |label, uri| {
+            let Some(ui) = w.upgrade() else { return glib::Propagation::Stop };
+            let full = uri
+                .strip_prefix("n:")
+                .and_then(|i| i.parse::<usize>().ok())
+                .and_then(|i| ui.full.borrow().get(i).cloned());
+            if let Some(full) = full {
+                show_full_number(label, &full);
+            }
+            glib::Propagation::Stop
         });
     }
 
@@ -479,6 +599,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         let w = weak(&ui);
         entry.connect_changed(move |_| {
             if let Some(ui) = w.upgrade() {
+                ui.refresh_display();
                 ui.preview();
             }
         });
@@ -560,6 +681,19 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     sidebar.append(&hist_head);
     sidebar.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
     sidebar.append(&scroller);
+    sidebar.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+    sidebar.append(
+        &gtk::Button::builder()
+            .label("Manage History…")
+            .tooltip_text("Browse and restore earlier sessions")
+            .css_classes(["flat"])
+            .action_name("win.manage-history")
+            .margin_top(2)
+            .margin_bottom(2)
+            .margin_start(4)
+            .margin_end(4)
+            .build(),
+    );
     sidebar.set_visible(cfg.history_visible);
 
     // ------------------------------------------------------ pane layout
@@ -630,7 +764,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
     header.pack_end(&hist_toggle);
     let menu = gio::Menu::new();
     let sec1 = gio::Menu::new();
-    sec1.append(Some("New Window"), Some("app.new-window"));
+    sec1.append(Some("Manage History…"), Some("win.manage-history"));
     let sec2 = gio::Menu::new();
     sec2.append(Some("Export History…"), Some("win.export-history"));
     sec2.append(Some("Clear History…"), Some("win.clear-history"));
@@ -646,6 +780,13 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         .menu_model(&menu)
         .build();
     header.pack_end(&menu_btn);
+    let new_btn = gtk::Button::builder()
+        .child(&plus_circle_icon())
+        .tooltip_text("New calculator (Ctrl+N)")
+        .action_name("app.new-window")
+        .css_classes(["flat"])
+        .build();
+    header.pack_end(&new_btn);
     win.set_titlebar(Some(&header));
 
     let mode_action = gio::SimpleAction::new_stateful(
@@ -768,7 +909,7 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
             let n = h.store.n_items();
             let dialog = gtk::AlertDialog::builder()
                 .message("Clear history?")
-                .detail(format!("This permanently deletes all {n} saved calculations."))
+                .detail(format!("This permanently deletes the {n} calculations saved in this session."))
                 .buttons(["Cancel", "Clear History"])
                 .cancel_button(0)
                 .default_button(0)
@@ -782,6 +923,19 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         });
     }
     win.add_action(&clear);
+
+    let manage = gio::SimpleAction::new("manage-history", None);
+    {
+        let win_w = win.downgrade();
+        let archive = archive.clone();
+        let session = history.session;
+        manage.connect_activate(move |_, _| {
+            if let Some(win) = win_w.upgrade() {
+                show_manage(&win, &archive, session);
+            }
+        });
+    }
+    win.add_action(&manage);
 
     let shortcuts = gio::SimpleAction::new("shortcuts", None);
     {
@@ -870,9 +1024,13 @@ pub fn new_window(app: &gtk::Application, history: &Rc<History>) {
         save_action.connect_activate(move |_, _| save());
     }
     win.add_action(&save_action);
+    archive.register(history.session, &win);
     win.connect_close_request({
         let save = save.clone();
+        let archive = archive.clone();
+        let session = history.session;
         move |_| {
+            archive.unregister(session);
             save();
             glib::Propagation::Proceed
         }
@@ -1032,6 +1190,7 @@ fn show_shortcuts(parent: &gtk::ApplicationWindow) {
         ("Backspace", "Delete last character"),
         ("Ctrl+C / Ctrl+V", "Copy / paste"),
         ("Ctrl+H", "Show or hide history"),
+        ("Ctrl+Shift+H", "Manage history"),
         ("Ctrl+N", "New window"),
         ("Ctrl+W", "Close window"),
         ("Ctrl+Q", "Quit"),
@@ -1109,4 +1268,208 @@ fn check_for_updates(win: &gtk::ApplicationWindow) {
             }
         }
     });
+}
+
+/// Popover under the `…` with the whole number, ready to select or copy.
+fn show_full_number(parent: &gtk::Label, full: &str) {
+    let popover = gtk::Popover::new();
+    popover.set_parent(parent);
+    let num = gtk::Label::builder()
+        .label(full)
+        .selectable(true)
+        .css_classes(["title-3", "monospace"])
+        .build();
+    let copy = gtk::Button::builder().label("Copy").css_classes(["flat"]).build();
+    let (clipboard, text, p) = (parent.clipboard(), full.to_string(), popover.clone());
+    copy.connect_clicked(move |_| {
+        clipboard.set_text(&text);
+        p.popdown();
+    });
+    let bx = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    bx.set_margin_top(8);
+    bx.set_margin_bottom(6);
+    bx.set_margin_start(10);
+    bx.set_margin_end(10);
+    bx.append(&num);
+    bx.append(&copy);
+    popover.set_child(Some(&bx));
+    popover.connect_closed(|p| {
+        let p = p.clone();
+        glib::idle_add_local_once(move || p.unparent());
+    });
+    popover.popup();
+}
+
+/// "Today, 2:32 pm" / "Yesterday, …" / "Mon 3 Nov 2026, …".
+fn when(id: u64) -> String {
+    if id == 0 {
+        return "Earlier history".into();
+    }
+    let (Ok(t), Ok(now)) = (glib::DateTime::from_unix_local(id as i64), glib::DateTime::now_local())
+    else {
+        return "Unknown time".into();
+    };
+    let day = |d: &glib::DateTime| (d.year(), d.day_of_year());
+    let clock = t.format("%-I:%M %P").map(|s| s.to_string()).unwrap_or_default();
+    if day(&t) == day(&now) {
+        format!("Today, {clock}")
+    } else if now.add_days(-1).is_ok_and(|y| day(&t) == day(&y)) {
+        format!("Yesterday, {clock}")
+    } else {
+        let date = t.format("%a %-d %b %Y").map(|s| s.to_string()).unwrap_or_default();
+        format!("{date}, {clock}")
+    }
+}
+
+/// Manage History: the last sessions, newest first. Restoring one opens it
+/// in its own window (or brings that window forward if it is already open).
+fn show_manage(parent: &gtk::ApplicationWindow, archive: &Rc<Archive>, current: u64) {
+    let dialog = gtk::Window::builder()
+        .title("Manage History")
+        .transient_for(parent)
+        .modal(true)
+        .default_width(420)
+        .default_height(520)
+        .build();
+    let title = gtk::Label::builder()
+        .label(format!("Last {SESSION_LIMIT} sessions"))
+        .xalign(0.0)
+        .css_classes(["title-3"])
+        .build();
+    let hint = gtk::Label::builder()
+        .label("Each calculator window is saved as a session. Restore one to carry on where you left off.")
+        .xalign(0.0)
+        .wrap(true)
+        .css_classes(["dim-label"])
+        .build();
+    let list = gtk::ListBox::builder()
+        .selection_mode(gtk::SelectionMode::None)
+        .css_classes(["boxed-list"])
+        .build();
+    let empty = gtk::Label::builder()
+        .label("Nothing saved yet.\nSessions appear here once you calculate something.")
+        .justify(gtk::Justification::Center)
+        .css_classes(["dim-label"])
+        .margin_top(40)
+        .build();
+    let scroller = gtk::ScrolledWindow::builder()
+        .vexpand(true)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(&list)
+        .build();
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    body.set_margin_top(14);
+    body.set_margin_bottom(14);
+    body.set_margin_start(14);
+    body.set_margin_end(14);
+    body.append(&title);
+    body.append(&hint);
+    body.append(&empty);
+    body.append(&scroller);
+    dialog.set_child(Some(&body));
+    fill_sessions(&dialog, parent, archive, current, &list, &empty, &scroller);
+    dialog.present();
+}
+
+fn fill_sessions(
+    dialog: &gtk::Window,
+    parent: &gtk::ApplicationWindow,
+    archive: &Rc<Archive>,
+    current: u64,
+    list: &gtk::ListBox,
+    empty: &gtk::Label,
+    scroller: &gtk::ScrolledWindow,
+) {
+    while let Some(row) = list.first_child() {
+        list.remove(&row);
+    }
+    let sessions = archive.sessions(SESSION_LIMIT);
+    empty.set_visible(sessions.is_empty());
+    scroller.set_visible(!sessions.is_empty());
+    for SessionInfo { id, count, last } in sessions {
+        let is_current = id == current;
+        let is_open = archive.window_of(id).is_some();
+        let head = gtk::Label::builder()
+            .label(when(id))
+            .xalign(0.0)
+            .css_classes(["heading"])
+            .build();
+        let mut sub = format!("{count} calculation{}", if count == 1 { "" } else { "s" });
+        if let Some((e, r)) = last {
+            sub.push_str(&format!(" · last: {e} = {r}"));
+        }
+        let detail = gtk::Label::builder()
+            .label(sub)
+            .xalign(0.0)
+            .ellipsize(pango::EllipsizeMode::End)
+            .css_classes(["dim-label", "caption"])
+            .build();
+        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        text.set_hexpand(true);
+        text.append(&head);
+        text.append(&detail);
+
+        let action = gtk::Button::builder()
+            .label(if is_current { "This window" } else if is_open { "Show" } else { "Restore" })
+            .valign(gtk::Align::Center)
+            .sensitive(!is_current)
+            .css_classes(if is_current || is_open { vec!["flat"] } else { vec!["suggested-action"] })
+            .build();
+        action.connect_clicked({
+            let (dialog, parent, archive) = (dialog.clone(), parent.clone(), archive.clone());
+            move |_| {
+                dialog.close();
+                match archive.window_of(id) {
+                    Some(w) => w.present(),
+                    None => {
+                        if let Some(app) = parent.application() {
+                            new_window(&app, &archive, Some(id));
+                        }
+                    }
+                }
+            }
+        });
+        let delete = gtk::Button::builder()
+            .icon_name("user-trash-symbolic")
+            .tooltip_text(if is_open {
+                "Close that window to delete this session"
+            } else {
+                "Delete this session"
+            })
+            .valign(gtk::Align::Center)
+            .sensitive(!is_open)
+            .css_classes(["flat"])
+            .build();
+        delete.connect_clicked({
+            let (dialog, parent, archive) = (dialog.clone(), parent.clone(), archive.clone());
+            let (list, empty, scroller) = (list.clone(), empty.clone(), scroller.clone());
+            move |_| {
+                let alert = gtk::AlertDialog::builder()
+                    .message("Delete this session?")
+                    .detail(format!("The {count} calculations from {} will be permanently deleted.", when(id)))
+                    .buttons(["Cancel", "Delete"])
+                    .cancel_button(0)
+                    .default_button(0)
+                    .build();
+                let (dialog2, parent, archive) = (dialog.clone(), parent.clone(), archive.clone());
+                let (list, empty, scroller) = (list.clone(), empty.clone(), scroller.clone());
+                alert.choose(Some(&dialog), gio::Cancellable::NONE, move |res| {
+                    if res == Ok(1) {
+                        archive.delete_session(id);
+                        fill_sessions(&dialog2, &parent, &archive, current, &list, &empty, &scroller);
+                    }
+                });
+            }
+        });
+
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        row.set_margin_top(8);
+        row.set_margin_bottom(8);
+        row.set_margin_start(12);
+        row.set_margin_end(8);
+        row.append(&text);
+        row.append(&action);
+        row.append(&delete);
+        list.append(&row);
+    }
 }

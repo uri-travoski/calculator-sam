@@ -1,3 +1,4 @@
+mod abbrev;
 mod config;
 mod engine;
 mod history;
@@ -29,8 +30,8 @@ fn main() -> glib::ExitCode {
         .flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE)
         .build();
 
-    // One history for the whole process, shared by every window.
-    let history: Rc<RefCell<Option<Rc<history::History>>>> = Rc::new(RefCell::new(None));
+    // All saved sessions for the whole process; each window shows one.
+    let history: Rc<RefCell<Option<Rc<history::Archive>>>> = Rc::new(RefCell::new(None));
 
     app.connect_startup({
         let history = history.clone();
@@ -49,7 +50,7 @@ fn main() -> glib::ExitCode {
             if let Some(settings) = gtk::Settings::default() {
                 settings.set_gtk_decoration_layout(Some(":close"));
             }
-            *history.borrow_mut() = Some(history::History::load());
+            *history.borrow_mut() = Some(history::Archive::load());
 
             let new_window = gio::SimpleAction::new("new-window", None);
             new_window.connect_activate({
@@ -74,6 +75,7 @@ fn main() -> glib::ExitCode {
             app.set_accels_for_action("app.new-window", &["<Ctrl>n"]);
             app.set_accels_for_action("app.quit", &["<Ctrl>q"]);
             app.set_accels_for_action("win.toggle-history", &["<Ctrl>h"]);
+            app.set_accels_for_action("win.manage-history", &["<Ctrl><Shift>h"]);
             app.set_accels_for_action("window.close", &["<Ctrl>w"]);
             app.set_accels_for_action("win.shortcuts", &["<Ctrl>question", "F1"]);
         }
@@ -92,8 +94,8 @@ fn main() -> glib::ExitCode {
     app.run()
 }
 
-fn open_window(app: &gtk::Application, history: &Rc<RefCell<Option<Rc<history::History>>>>) {
+fn open_window(app: &gtk::Application, history: &Rc<RefCell<Option<Rc<history::Archive>>>>) {
     if let Some(h) = history.borrow().as_ref() {
-        window::new_window(app, h);
+        window::new_window(app, h, None);
     }
 }

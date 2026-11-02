@@ -49,3 +49,10 @@
 .history-row .expr { opacity: 0.6; }
 .inline-history { background: none; }
 .inline-history row { background: none; }
+
+/* Long numbers: the label shows the short form over the (transparent) entry. */
+.display entry.masked,
+.display entry.masked:focus-within { color: transparent; caret-color: transparent; }
+.display label.abbr { font-weight: 300; }
+.display label.abbr link,
+.display label.abbr link:visited { color: #ff8a00; text-decoration: none; }
