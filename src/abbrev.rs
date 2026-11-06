@@ -3,7 +3,7 @@
 //! [`MAX_DIGITS`] digits) is one click away.
 
 /// Digits visible in the display before the `…`.
-pub const SHOW_DIGITS: usize = 7;
+pub const SHOW_DIGITS: usize = 12;
 /// Digits a number may have in total.
 pub const MAX_DIGITS: usize = 15;
 
@@ -119,17 +119,17 @@ mod tests {
 
     #[test]
     fn short_numbers_untouched() {
-        assert_eq!(flat("1234567+2.5"), "1234567+2.5");
-        assert_eq!(flat("1234567.5"), "1234567…");
+        assert_eq!(flat("123456789012+2.5"), "123456789012+2.5");
+        assert_eq!(flat("123456789012.5"), "123456789012…");
         assert_eq!(flat("0.123456"), "0.123456");
     }
 
     #[test]
     fn long_numbers_cut_per_number() {
-        assert_eq!(flat("123456789×2"), "1234567…×2");
-        assert_eq!(flat("12345678+98765432"), "1234567…+9876543…");
-        assert_eq!(flat("-3.14159265358979"), "-3.141592…");
-        assert_eq!(flat("1.23456789012345e+20"), "1.234567…");
+        assert_eq!(flat("1234567890123×2"), "123456789012…×2");
+        assert_eq!(flat("1234567890123+9876543210987"), "123456789012…+987654321098…");
+        assert_eq!(flat("-3.14159265358979"), "-3.14159265358…");
+        assert_eq!(flat("1.23456789012345e+20"), "1.23456789012…");
         assert_eq!(flat("1e+20"), "1e+20");
     }
 

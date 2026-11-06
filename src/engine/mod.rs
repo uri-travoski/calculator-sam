@@ -90,6 +90,14 @@ mod tests {
     }
 
     #[test]
+    fn percent_of_left_operand_in_add_sub() {
+        assert_eq!(ok("500-15%"), "425");
+        assert_eq!(ok("200+10%"), "220");
+        assert_eq!(ok("500*15%"), "75");
+        assert_eq!(ok("50%"), "0.5");
+    }
+
+    #[test]
     fn unary_minus() {
         assert_eq!(ok("-2^2"), "-4");
         assert_eq!(ok("(-2)^2"), "4");

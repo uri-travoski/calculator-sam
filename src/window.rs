@@ -21,7 +21,7 @@ use crate::{APP_ID, REPO_URL, RELEASES_URL, VERSION};
 
 const ADV_COLS: i32 = 3;
 /// Fixed key size: resizing the window never changes the buttons.
-const KEY_W: i32 = 74;
+const KEY_W: i32 = 70;
 const KEY_H: i32 = 56;
 const KEY_GAP: i32 = 6;
 /// Height of the display area with the history sidebar closed.
@@ -306,7 +306,7 @@ impl Ui {
     }
 
     /// Keep numbers within 15 digits and mirror the entry in `abbr`, with
-    /// every number over 7 digits cut short and ending in a `…` link.
+    /// every number over 12 digits cut short and ending in a `…` link.
     fn refresh_display(&self) {
         if self.fixing.get() {
             return;

@@ -65,7 +65,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            width: 340,
+            width: 322,
             height: 660,
             mode: Mode::Basic,
             radians: false,

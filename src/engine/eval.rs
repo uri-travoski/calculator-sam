@@ -69,6 +69,14 @@ fn eval_node(node: &Node, env: &Env<'_>) -> Result<Float, CalcError> {
             Ok(v / Float::with_val(PRECISION, 100))
         }
         Node::Fact(x) => factorial(&eval_node(x, env)?),
+        Node::Bin(op @ (BinOp::Add | BinOp::Sub), a, b) if matches!(**b, Node::Percent(_)) => {
+            // `500-15%` means 500 minus 15% *of 500*, as on a desk calculator.
+            let Node::Percent(inner) = &**b else { unreachable!() };
+            let x = eval_node(a, env)?;
+            let pct = eval_node(inner, env)? / Float::with_val(PRECISION, 100);
+            let delta = x.clone() * pct;
+            Ok(if matches!(op, BinOp::Add) { x + delta } else { x - delta })
+        }
         Node::Bin(op, a, b) => {
             let x = eval_node(a, env)?;
             let y = eval_node(b, env)?;
