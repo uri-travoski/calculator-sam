@@ -10,7 +10,7 @@ A minimal, fast desktop calculator for Linux, written in Rust with plain GTK4
 * **History sidebar** – virtualised list (50 000+ entries are fine), click an entry to reuse its result, right-click to copy or delete, **export as a text file**, clear with confirmation.
 * **Multiple windows, one process** – a second launch or `sam-calc --new-window` opens a window in the running instance; all windows share one history.
 * **Check for Updates** in the menu: opens the GitHub download page only if a newer release exists (checked only when you ask; needs the repo to be public).
-* Remembers window size, mode and angle unit in `$XDG_CONFIG_HOME/au.sam.Calc/config.toml`; history lives in `$XDG_DATA_HOME/au.sam.Calc/history.jsonl`.
+* Remembers window size, mode and angle unit in `$XDG_CONFIG_HOME/io.github.uri_travoski.Calc/config.toml`; history lives in `$XDG_DATA_HOME/io.github.uri_travoski.Calc/history.jsonl`.
 
 Keys: `Enter`/`=` calculate · `Esc` clear · `Ctrl+H` history · `Ctrl+N` new window · `Ctrl+W` close · `Ctrl+Q` quit · `F1` shortcuts.
 
@@ -54,8 +54,8 @@ make deb        # needs: cargo install cargo-deb
 make rpm        # needs: cargo install cargo-generate-rpm
 ```
 
-Packages install `/usr/bin/sam-calc`, `au.sam.Calc.desktop` and the icon
-`au.sam.Calc.svg` (the desktop file name equals the application ID so Wayland
+Packages install `/usr/bin/sam-calc`, `io.github.uri_travoski.Calc.desktop` and the icon
+`io.github.uri_travoski.Calc.svg` (the desktop file name equals the application ID so Wayland
 shells match windows to the icon and show the *New Window* action).
 
 ## Releases

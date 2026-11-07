@@ -63,7 +63,7 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: sam-calc.flatpak
-          manifest-path: packaging/flatpak/au.sam.Calc.yml
+          manifest-path: packaging/flatpak/io.github.uri_travoski.Calc.yml
           cache-key: flatpak-${{ github.sha }}
           upload-artifact: false
       - uses: softprops/action-gh-release@v2
@@ -90,9 +90,9 @@ jobs:
           chmod +x linuxdeploy linuxdeploy-plugin-gtk.sh
           ./linuxdeploy --appdir AppDir \
             --executable target/release/sam-calc \
-            --desktop-file data/au.sam.Calc.desktop \
-            --icon-file data/au.sam.Calc.svg \
-            --icon-filename au.sam.Calc \
+            --desktop-file data/io.github.uri_travoski.Calc.desktop \
+            --icon-file data/io.github.uri_travoski.Calc.svg \
+            --icon-filename io.github.uri_travoski.Calc \
             --plugin gtk \
             --output appimage
           mv Calculator*.AppImage Calculator.Sam-x86_64.AppImage

@@ -2,7 +2,7 @@
 //!
 //! One [`Archive`] exists per process: every saved calculation of every
 //! session, backed by an append-only JSON-lines file at
-//! `$XDG_DATA_HOME/au.sam.Calc/history.jsonl`. Each window owns a
+//! `$XDG_DATA_HOME/io.github.uri_travoski.Calc/history.jsonl`. Each window owns a
 //! [`History`], the view of one session: its own `gio::ListStore` (the model
 //! behind the virtualised `ListView`s). Rows saved by older versions have no
 //! session and are grouped as session `0`.

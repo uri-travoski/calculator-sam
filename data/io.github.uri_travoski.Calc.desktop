@@ -4,12 +4,12 @@ Name=Calculator.Sam
 GenericName=Calculator
 Comment=Minimal, fast calculator
 Exec=sam-calc
-Icon=au.sam.Calc
+Icon=io.github.uri_travoski.Calc
 Terminal=false
 Categories=GTK;Utility;Calculator;
 Keywords=calculator;math;arithmetic;
 StartupNotify=true
-StartupWMClass=au.sam.Calc
+StartupWMClass=io.github.uri_travoski.Calc
 Actions=new-window;
 
 [Desktop Action new-window]

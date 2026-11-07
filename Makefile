@@ -1,5 +1,5 @@
 PREFIX ?= $(HOME)/.local
-APP_ID = au.sam.Calc
+APP_ID = io.github.uri_travoski.Calc
 
 build:
 	cargo build --release

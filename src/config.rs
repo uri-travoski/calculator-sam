@@ -1,4 +1,4 @@
-//! Tiny `key = value` config at `$XDG_CONFIG_HOME/au.sam.Calc/config.toml`.
+//! Tiny `key = value` config at `$XDG_CONFIG_HOME/io.github.uri_travoski.Calc/config.toml`.
 //! No TOML crate and no GSettings, so no schema has to be installed.
 
 use std::fs;

@@ -12,7 +12,10 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
-pub const APP_ID: &str = "au.sam.Calc";
+pub const APP_ID: &str = "io.github.uri_travoski.Calc";
+/// Application ID used before the Flathub rename; its config and history
+/// directories are copied over on first run.
+const LEGACY_APP_ID: &str = "au.sam.Calc";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const REPO_URL: &str = "https://github.com/uri-travoski/calculator-sam";
 pub const RELEASES_URL: &str = "https://github.com/uri-travoski/calculator-sam/releases/latest";
@@ -25,6 +28,7 @@ fn main() -> glib::ExitCode {
     if std::env::var_os("GSK_RENDERER").is_none() {
         std::env::set_var("GSK_RENDERER", "cairo");
     }
+    migrate_legacy_dirs();
     let app = gtk::Application::builder()
         .application_id(APP_ID)
         .flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE)
@@ -97,5 +101,17 @@ fn main() -> glib::ExitCode {
 fn open_window(app: &gtk::Application, history: &Rc<RefCell<Option<Rc<history::Archive>>>>) {
     if let Some(h) = history.borrow().as_ref() {
         window::new_window(app, h, None);
+    }
+}
+
+/// Copy settings and history from the pre-rename directories, once.
+fn migrate_legacy_dirs() {
+    for base in [glib::user_config_dir(), glib::user_data_dir()] {
+        let (old, new) = (base.join(LEGACY_APP_ID), base.join(APP_ID));
+        if old.is_dir() && !new.exists() && std::fs::create_dir_all(&new).is_ok() {
+            for entry in std::fs::read_dir(&old).into_iter().flatten().flatten() {
+                let _ = std::fs::copy(entry.path(), new.join(entry.file_name()));
+            }
+        }
     }
 }

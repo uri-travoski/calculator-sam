@@ -1,6 +1,6 @@
 [package]
 name = "sam-calc"
-version = "1.4.1"
+version = "1.5.0"
 edition = "2021"
 rust-version = "1.83"
 authors = ["Sam"]
@@ -36,13 +36,13 @@ depends = "$auto"
 extended-description = "Fast, low-resource GTK4 calculator with arbitrary-precision arithmetic, a shared history sidebar, multiple windows and a resizable layout."
 assets = [
     ["target/release/sam-calc", "usr/bin/", "755"],
-    ["data/au.sam.Calc.desktop", "usr/share/applications/", "644"],
-    ["data/au.sam.Calc.metainfo.xml", "usr/share/metainfo/", "644"],
-    ["data/au.sam.Calc.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
-    ["data/icons/au.sam.Calc-48.png", "usr/share/icons/hicolor/48x48/apps/au.sam.Calc.png", "644"],
-    ["data/icons/au.sam.Calc-128.png", "usr/share/icons/hicolor/128x128/apps/au.sam.Calc.png", "644"],
-    ["data/icons/au.sam.Calc-256.png", "usr/share/icons/hicolor/256x256/apps/au.sam.Calc.png", "644"],
-    ["data/icons/au.sam.Calc-512.png", "usr/share/icons/hicolor/512x512/apps/au.sam.Calc.png", "644"],
+    ["data/io.github.uri_travoski.Calc.desktop", "usr/share/applications/", "644"],
+    ["data/io.github.uri_travoski.Calc.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["data/io.github.uri_travoski.Calc.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["data/icons/io.github.uri_travoski.Calc-48.png", "usr/share/icons/hicolor/48x48/apps/io.github.uri_travoski.Calc.png", "644"],
+    ["data/icons/io.github.uri_travoski.Calc-128.png", "usr/share/icons/hicolor/128x128/apps/io.github.uri_travoski.Calc.png", "644"],
+    ["data/icons/io.github.uri_travoski.Calc-256.png", "usr/share/icons/hicolor/256x256/apps/io.github.uri_travoski.Calc.png", "644"],
+    ["data/icons/io.github.uri_travoski.Calc-512.png", "usr/share/icons/hicolor/512x512/apps/io.github.uri_travoski.Calc.png", "644"],
 ]
 
 [package.metadata.generate-rpm]
@@ -50,13 +50,13 @@ name = "sam-calc"
 license = "MIT"
 assets = [
     { source = "target/release/sam-calc", dest = "/usr/bin/sam-calc", mode = "755" },
-    { source = "data/au.sam.Calc.desktop", dest = "/usr/share/applications/au.sam.Calc.desktop", mode = "644" },
-    { source = "data/au.sam.Calc.metainfo.xml", dest = "/usr/share/metainfo/au.sam.Calc.metainfo.xml", mode = "644" },
-    { source = "data/au.sam.Calc.svg", dest = "/usr/share/icons/hicolor/scalable/apps/au.sam.Calc.svg", mode = "644" },
-    { source = "data/icons/au.sam.Calc-48.png", dest = "/usr/share/icons/hicolor/48x48/apps/au.sam.Calc.png", mode = "644" },
-    { source = "data/icons/au.sam.Calc-128.png", dest = "/usr/share/icons/hicolor/128x128/apps/au.sam.Calc.png", mode = "644" },
-    { source = "data/icons/au.sam.Calc-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/au.sam.Calc.png", mode = "644" },
-    { source = "data/icons/au.sam.Calc-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/au.sam.Calc.png", mode = "644" },
+    { source = "data/io.github.uri_travoski.Calc.desktop", dest = "/usr/share/applications/io.github.uri_travoski.Calc.desktop", mode = "644" },
+    { source = "data/io.github.uri_travoski.Calc.metainfo.xml", dest = "/usr/share/metainfo/io.github.uri_travoski.Calc.metainfo.xml", mode = "644" },
+    { source = "data/io.github.uri_travoski.Calc.svg", dest = "/usr/share/icons/hicolor/scalable/apps/io.github.uri_travoski.Calc.svg", mode = "644" },
+    { source = "data/icons/io.github.uri_travoski.Calc-48.png", dest = "/usr/share/icons/hicolor/48x48/apps/io.github.uri_travoski.Calc.png", mode = "644" },
+    { source = "data/icons/io.github.uri_travoski.Calc-128.png", dest = "/usr/share/icons/hicolor/128x128/apps/io.github.uri_travoski.Calc.png", mode = "644" },
+    { source = "data/icons/io.github.uri_travoski.Calc-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/io.github.uri_travoski.Calc.png", mode = "644" },
+    { source = "data/icons/io.github.uri_travoski.Calc-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/io.github.uri_travoski.Calc.png", mode = "644" },
 ]
 
 [package.metadata.generate-rpm.requires]
