@@ -28,22 +28,22 @@
   font-size: 22px;
   font-weight: 400;
   background-image: none;
-  background-color: alpha(currentColor, 0.05);
+  background-color: alpha(currentColor, 0.10);
   box-shadow: 0 1px 3px alpha(black, 0.10);
 }
-.keypad button:hover { background-color: alpha(currentColor, 0.10); }
-.keypad button:active { background-color: alpha(currentColor, 0.16); }
+.keypad button:hover { background-color: alpha(currentColor, 0.15); }
+.keypad button:active { background-color: alpha(currentColor, 0.21); }
 .keypad button.small { font-size: 15px; }
-.keypad button.op { background-color: alpha(#4a8fe8, 0.14); }
-.keypad button.op:hover { background-color: alpha(#4a8fe8, 0.22); }
-.keypad button.fn { background-color: alpha(currentColor, 0.09); }
+.keypad button.op { background-color: alpha(#4a8fe8, 0.19); }
+.keypad button.op:hover { background-color: alpha(#4a8fe8, 0.27); }
+.keypad button.fn { background-color: alpha(currentColor, 0.14); }
 .keypad button.clear,
 .keypad button.equals {
   color: #ff8a00;
-  background-color: alpha(#ff8a00, 0.15);
+  background-color: alpha(#ff8a00, 0.20);
 }
 .keypad button.clear:hover,
-.keypad button.equals:hover { background-color: alpha(#ff8a00, 0.24); }
+.keypad button.equals:hover { background-color: alpha(#ff8a00, 0.29); }
 
 .history-row { padding: 6px 10px; }
 .history-row .expr { opacity: 0.6; }

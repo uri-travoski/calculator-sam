@@ -21,7 +21,7 @@ use crate::{APP_ID, REPO_URL, RELEASES_URL, VERSION};
 
 const ADV_COLS: i32 = 3;
 /// Fixed key size: resizing the window never changes the buttons.
-const KEY_W: i32 = 70;
+const KEY_W: i32 = 68;
 const KEY_H: i32 = 56;
 const KEY_GAP: i32 = 6;
 /// Height of the display area with the history sidebar closed.
@@ -645,6 +645,43 @@ pub fn new_window(app: &gtk::Application, archive: &Rc<Archive>, revive: Option<
             glib::Propagation::Proceed
         });
         entry.add_controller(keys);
+    }
+
+    // Typing anywhere in the window (after clicking the keypad background, the history list, ...)
+    // goes to the calculator entry, unless another text field currently has focus.
+    {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let (w, win_w) = (weak(&ui), win.downgrade());
+        keys.connect_key_pressed(move |ctl, keyval, _, state| {
+            let (Some(ui), Some(win)) = (w.upgrade(), win_w.upgrade()) else {
+                return glib::Propagation::Proceed;
+            };
+            if state.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
+                return glib::Propagation::Proceed;
+            }
+            let typing = keyval.to_unicode().is_some_and(|c| !c.is_control() && !c.is_whitespace())
+                || matches!(keyval, gdk::Key::BackSpace | gdk::Key::Delete | gdk::Key::Escape);
+            if !typing {
+                return glib::Propagation::Proceed;
+            }
+            let in_text = gtk::prelude::GtkWindowExt::focus(&win)
+                .is_some_and(|f| f.is::<gtk::Text>() || f.is::<gtk::TextView>());
+            if in_text {
+                return glib::Propagation::Proceed;
+            }
+            ui.entry.grab_focus_without_selecting();
+            // the entry's own shortcuts first (Escape, "=", replacing a finished result) ...
+            let handled = ctl.forward(&ui.entry)
+                // ... then the text widget inside it, which does the actual typing
+                || ui.entry.delegate().is_some_and(|d| ctl.forward(d.upcast_ref::<gtk::Widget>()));
+            if handled {
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+        win.add_controller(keys);
     }
 
     // ---------------------------------------------------- history pane
