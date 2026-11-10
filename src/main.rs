@@ -29,6 +29,9 @@ fn main() -> glib::ExitCode {
         std::env::set_var("GSK_RENDERER", "cairo");
     }
     migrate_legacy_dirs();
+    // The window class (WM_CLASS) must equal the desktop file's StartupWMClass, or panels such as
+    // Cinnamon's cannot match the window to its launcher and show no icon.
+    glib::set_prgname(Some(APP_ID));
     let app = gtk::Application::builder()
         .application_id(APP_ID)
         .flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE)
